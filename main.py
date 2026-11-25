@@ -33,6 +33,11 @@
 # "searched" drops the slack verb, "Its partner is missing" keeps the
 # deadpan accusation while sounding like a machine's own filing. The
 # revised line scores one point higher on tightness and takes the win.
+#
+# REVISION 2 (SHA-256 output verification): the read-back check now also
+# compares the SHA-256 digest of the selected message against the digest
+# of the bytes read back from /output/entry.txt, so a corrupted write
+# fails loudly even if it still decodes as valid UTF-8.
 
 CANDIDATES = [
     # score: real 10, laugh 9, honest 10, voice 9, economy 9 = 47
@@ -113,6 +118,7 @@ def pick(candidates):
 
 def main():
     message = pick(CANDIDATES)
+    import hashlib
     import os
     import sys
     os.makedirs("/output", exist_ok=True)
@@ -125,6 +131,14 @@ def main():
         raw = f.read()
     if raw.decode("utf-8") != message:
         print("error: /output/entry.txt does not match the selected message",
+              file=sys.stderr)
+        sys.exit(1)
+    # SHA-256 cross-check: the digest of the selected message must match
+    # the digest of the bytes read back, so a write that silently
+    # corrupts bytes fails loudly instead of submitting a broken entry.
+    if hashlib.sha256(message.encode("utf-8")).hexdigest() != \
+            hashlib.sha256(raw).hexdigest():
+        print("error: SHA-256 mismatch for /output/entry.txt",
               file=sys.stderr)
         sys.exit(1)
     if not (1 <= len(message) <= 200) or "\n" in message or not message.strip():
